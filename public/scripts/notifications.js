@@ -7,23 +7,23 @@ var GREEN = "#0f9d58";
 var BLUE = "#4285f4";
 var RED = "#db443";
 
-var imageFile = null;
+var FileList = [];
 
 var notificationData = {
-    title : null,
-    message : null,
-    imageUrl : null,
-    username : null
+    title: null,
+    message: null,
+    imageUrl: "",
+    username: null
 };
 
 function clearNewNotification() {
     $("#input-notification-title").val("");
     $("#input-notification-message").val("");
-    $("#img-preview").attr("src","");
+    $("#img-preview").attr("src", "");
     imageFile = null;
     notificationData.title = null;
     notificationData.message = null;
-    notificationData.imageUrl = null;
+    notificationData.imageUrl = "";
     notificationData.username = null;
 }
 
@@ -34,24 +34,35 @@ function resetAlerts() {
 
 function selectImage() {
 
-    var inputFile = $("<input type='file' accept='image/*'>").click(function () {
-        
-        $(this).one("change",function (event) {
+    var inputFile = $("<input type='file'>").click(function() {
+
+        $(this).one("change", function(event) {
             //Get file
             var file = event.target.files[0];
-            if(file.type.search("image/") === 0) {
-				$("#img-preview").attr("src",URL.createObjectURL(file));
-				imageFile = file;
-				
-			}
-			else {
-				toastr.error("Error : File not an image");
-			}
+            if (file.type.search("image/") === 0) {
+                var img = $('<img />', {
+                    id: 'img-preview',
+                    src: URL.createObjectURL(file),
+                    alt: 'MyAlt',
+                    class: 'img-fluid z-depth-1 hoverable',
+                });
+                img.appendTo($('#imgs-up'));
+                FileList.push(file);
+                toastr.success('Image added to Queue: ' + file.name);
+            } else {
+                if (file.type.search("application/pdf") === 0) {
+                    FileList.push(file);
+                    toastr.success('PDF file added to Queue: ' + file.name);
+                } else {
+                    toastr.error("Error : File not an image");
+                    console.log(file.type);
+                }
+            }
 
         });
     });
     inputFile.click();
-    
+
 }
 
 function verifyNotif() {
@@ -71,7 +82,7 @@ function verifyNotif() {
 }
 
 function insertNotificationToDatabase() {
-    
+
     const ADMIN_FEED_PATH_DEBUG = "/debug/adminFeed";
     const ADMIN_FEED_PATH_RELEASE = "/release/adminFeed";
     var dbRefDebug = firebase.database().ref(ADMIN_FEED_PATH_DEBUG);
@@ -79,27 +90,27 @@ function insertNotificationToDatabase() {
 
     var notificationKey = dbRefDebug.push().key;
 
-    function setNotifResponse (result) {
+    function setNotifResponse(result) {
 
         if (result) {
             toastr.error(result.message);
-            $("#spinner-upload").css("color",RED);
+            $("#spinner-upload").css("color", RED);
             $("#spinner-upload").hide();
-		} else {
+        } else {
 
             $("#modal-confirm").modal("hide");
             clearNewNotification();
-            $("#spinner-upload").css("color",RED);
+            $("#spinner-upload").css("color", RED);
             $("#spinner-upload").hide();
             Snackbar.show({
-                text : "Notification sent",
-                pos  : "top-right"
+                text: "Notification sent",
+                pos: "top-right"
             });
-            
-		}
+
+        }
     };
 
-    dbRefDebug.child(notificationKey).set(notificationData,setNotifResponse);
+    dbRefDebug.child(notificationKey).set(notificationData, setNotifResponse);
     // dbRefRelease.child(notificationKey).set(notificationData,setNotifResponse);
 
 }
@@ -110,41 +121,46 @@ function setNotifDataAndUpload() {
     notificationData.title = $("#input-notification-title").val();
     notificationData.message = $("#input-notification-message").val();
     var userEmail = firebase.auth().currentUser.email;
-    notificationData.username = userEmail.substring(0,userEmail.indexOf("@"));
-    
-    if (imageFile) {
+    notificationData.username = userEmail.substring(0, userEmail.indexOf("@"));
+    for (var i = FileList.length - 1; i >= 0; i--) {
+        File = FileList[i];
+        console.log('Uploading ' + i + ' File');
+        if (File) {
 
-        //Upload the image
-        var storageRef = firebase.storage().ref("adminFeed-image/"
-                                                + imageFile.name
-                                                + Date.now());
-        var uploadTask = storageRef.put(imageFile);
-        $("#spinner-upload").css("color",BLUE);
-        uploadTask.on("state_changed",
-            function progress(snapshot) {
-                            
-            },
-            function error(error) {				
-                toastr.error(error.message);
-                $("#spinner-upload").css("color",RED);
-                $("#spinner-upload").hide();
-            },
-            function complete(argument) {
+            //Upload the image/file
+            var storageRef = firebase.storage().ref("adminFeed-" +
+                File.type.split('/')[0] +
+                "/" +
+                File.name +
+                Date.now());
+            var uploadTask = storageRef.put(File);
+            $("#spinner-upload").css("color", BLUE);
+            uploadTask.on("state_changed",
+                function progress(snapshot) {
 
-                /**New image uploaded**/
-                $("#spinner-upload").css("color",GREEN);
-                //Get download url
-                storageRef.getDownloadURL().then(function (url) {                    
-                    notificationData.imageUrl = url;
-                    insertNotificationToDatabase();
-                });		
-            }	
-	    );
-    } else {
-        notificationData.imageUrl = "";
-        insertNotificationToDatabase();
+                },
+                function error(error) {
+                    toastr.error(error.message);
+                    $("#spinner-upload").css("color", RED);
+                    $("#spinner-upload").hide();
+                },
+                function complete(argument) {
+
+                    /**New image uploaded**/
+                    $("#spinner-upload").css("color", GREEN);
+                    //Get download url
+                    storageRef.getDownloadURL().then(function(url) {
+                        if(File.type.search('image/')===0)
+                            notificationData.imageUrl = url;
+                        insertNotificationToDatabase();
+                    });
+                }
+            );
+        } else {
+            notificationData.imageUrl = "";
+            insertNotificationToDatabase();
+        }
     }
-
 }
 
 function sendNotification() {
@@ -152,7 +168,7 @@ function sendNotification() {
     if (!verifyNotif()) {
         return;
     }
-    if (!imageFile) {        
+    if (!imageFile) {
         $("#alert-image-selected").hide();
     } else {
         $("#alert-image-not-selected").hide();
@@ -160,14 +176,14 @@ function sendNotification() {
     $("#modal-confirm").modal("show");
 }
 
-$(function () {
+$(function() {
 
     $("#btn-upload-image").click(selectImage);
 
     $("#btn-send").click(sendNotification);
 
-    $("#modal-confirm").on("hidden.bs.modal",resetAlerts);
-     
+    $("#modal-confirm").on("hidden.bs.modal", resetAlerts);
+
     $("#btn-send-confirm").click(setNotifDataAndUpload);
 
 });
