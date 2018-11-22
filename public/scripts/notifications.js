@@ -7,7 +7,7 @@ var GREEN = "#0f9d58";
 var BLUE = "#4285f4";
 var RED = "#db443";
 
-var FileList = [];
+var fileListAll = [];
 
 var notificationData = {
     title: null,
@@ -47,14 +47,14 @@ function selectImage() {
                     class: 'img-fluid z-depth-1 hoverable',
                 });
                 img.appendTo($('#imgs-up'));
-                FileList.push(file);
+                fileListAll.push(file);
                 toastr.success('Image added to Queue: ' + file.name);
             } else {
                 if (file.type.search("application/pdf") === 0) {
-                    FileList.push(file);
+                    fileListAll.push(file);
                     toastr.success('PDF file added to Queue: ' + file.name);
                 } else {
-                    toastr.error("Error : File not an image");
+                    toastr.error("Error : File not supported");
                     console.log(file.type);
                 }
             }
@@ -122,18 +122,18 @@ function setNotifDataAndUpload() {
     notificationData.message = $("#input-notification-message").val();
     var userEmail = firebase.auth().currentUser.email;
     notificationData.username = userEmail.substring(0, userEmail.indexOf("@"));
-    for (var i = FileList.length - 1; i >= 0; i--) {
-        File = FileList[i];
+    for (var i = fileListAll.length - 1; i >= 0; i--) {
+        currentFile = fileListAll[i];
         console.log('Uploading ' + i + ' File');
-        if (File) {
+        if (currentFile) {
 
             //Upload the image/file
             var storageRef = firebase.storage().ref("adminFeed-" +
-                File.type.split('/')[0] +
+                currentFile.type.split('/')[0] +
                 "/" +
-                File.name +
+                currentFile.name +
                 Date.now());
-            var uploadTask = storageRef.put(File);
+            var uploadTask = storageRef.put(currentFile);
             $("#spinner-upload").css("color", BLUE);
             uploadTask.on("state_changed",
                 function progress(snapshot) {
@@ -150,7 +150,7 @@ function setNotifDataAndUpload() {
                     $("#spinner-upload").css("color", GREEN);
                     //Get download url
                     storageRef.getDownloadURL().then(function(url) {
-                        if(File.type.search('image/')===0)
+                        if(currentFile.type.search('image/')===0)
                             notificationData.imageUrl = url;
                         insertNotificationToDatabase();
                     });
@@ -168,7 +168,7 @@ function sendNotification() {
     if (!verifyNotif()) {
         return;
     }
-    if (!imageFile) {
+    if (!Array.isArray(fileListAll) || !fileListAll.length) {
         $("#alert-image-selected").hide();
     } else {
         $("#alert-image-not-selected").hide();
