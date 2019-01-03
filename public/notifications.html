@@ -55,13 +55,17 @@
 					<label for="input-notification-message">Message</label>
 				</div>
 
-				<!-- Image button-->
-				<div id="imgs-up">
+				<!-- File button-->
+				<div id="imgs-up" class="fileuploads">
 					<button id="btn-upload-image" class="btn btn-purple btn-block z-depth-0 my-4 waves-effect"
-					type="button">Upload File/Image<br>(Optional)</button>
+					type="button">
+						Upload File<br>(Optional)
+					</button>
 				</div>
 				<!-- Send button -->
-				<button id="btn-send" class="btn btn-indigo btn-block z-depth-0 my-4 waves-effect" type="button">Send</button>
+				<button id="btn-send" class="btn btn-indigo btn-block z-depth-0 my-4 waves-effect" type="button">
+					Send
+				</button>
 
 			</form>			
 		</div>
@@ -80,7 +84,7 @@
 				</div>
 				<div class="modal-body">
 					<div id="alert-image-not-selected" class="alert alert-danger" role="alert">
-						No image will be uploaded.<br>
+						No File will be uploaded.<br>
 						Confirm notification?
 					</div>
 					<div id="alert-image-selected" class="alert alert-primary" role="alert">
@@ -88,8 +92,7 @@
 					 </div>
 				</div>
 				<div class="modal-footer">
-					<span id="spinner-upload"
-					class="fa fa-spinner fa-pulse fa-3x spinner-upload"></span>
+					<span id="spinner-upload" class="fa fa-spinner fa-pulse fa-3x spinner-upload"></span>
 					<button type="button" class="btn btn-danger" data-dismiss="modal">Cancel</button>
 					<button id="btn-send-confirm" type="button" class="btn btn-dark-green">Send Notification</button>
 				</div>

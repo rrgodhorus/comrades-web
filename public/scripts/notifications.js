@@ -2,29 +2,37 @@
 //ESLINT rules 
 /*global Snackbar toastr firebase*/
 
+// idx tracks the number of calls for upload and helps in creating new progressbar each time
+var idx = 0;
 
 var GREEN = "#0f9d58";
 var BLUE = "#4285f4";
 var RED = "#db443";
 
-var fileListAll = [];
+/* 
+ * fileRefs : list of the uploaded files as dict with 
+ *         name, downloadURL and fullPath in storage
+ * responses: list of their responses received
+ */
+var fileRefs = []
+var responses = []
 
-var notificationData = {
-    title: null,
-    message: null,
-    imageUrl: "",
-    username: null
-};
+
+const ADMIN_FEED_PATH_DEBUG = "/debug/adminFeed";
+const ADMIN_FEED_PATH_RELEASE = "/release/adminFeed";
+var dbRefDebug = firebase.database().ref(ADMIN_FEED_PATH_DEBUG);
+// var dbRefRelease = firebase.database().ref(ADMIN_FEED_PATH_RELEASE);
+const ADMIN_STORAGE_PATH_DEBUG = "/debug/adminStorage";
+const ADMIN_STORAGE_PATH_RELEASE = "/release/adminStorage";
+var storageRefDebug = firebase.storage().ref(ADMIN_STORAGE_PATH_DEBUG);
+// var storageRefRelease = firebase.storage().ref(ADMIN_STORAGE_PATH_RELEASE);
 
 function clearNewNotification() {
     $("#input-notification-title").val("");
     $("#input-notification-message").val("");
-    $("#img-preview").attr("src", "");
-    imageFile = null;
-    notificationData.title = null;
-    notificationData.message = null;
-    notificationData.imageUrl = "";
-    notificationData.username = null;
+    $(".progress").remove();
+    fileRefs = []
+    responses = []
 }
 
 function resetAlerts() {
@@ -32,33 +40,104 @@ function resetAlerts() {
     $("#alert-image-not-selected").show();
 }
 
-function selectImage() {
 
-    var inputFile = $("<input type='file'>").click(function() {
+function uploadFile(file, storageRef){
+    return new Promise(function(resolve, reject){
+            /* New Upload initiated */
+            idx = idx + 1;
 
-        $(this).one("change", function(event) {
-            //Get file
-            var file = event.target.files[0];
-            if (file.type.search("image/") === 0) {
-                var img = $('<img />', {
-                    id: 'img-preview',
-                    src: URL.createObjectURL(file),
-                    alt: 'MyAlt',
-                    class: 'img-fluid z-depth-1 hoverable',
-                });
-                img.appendTo($('#imgs-up'));
-                fileListAll.push(file);
-                toastr.success('Image added to Queue: ' + file.name);
-            } else {
-                if (file.type.search("application/pdf") === 0) {
-                    fileListAll.push(file);
-                    toastr.success('PDF file added to Queue: ' + file.name);
-                } else {
-                    toastr.error("Error : File not supported");
-                    console.log(file.type);
+            /* Create a new upload task for the specific file */
+            var fileRef = storageRef.child(file.name);
+            var uploadTask = fileRef.put(file);
+            
+            /* Create a new mdBootstrap progress Bar that updates with flow */
+            var progress = 0;
+            $('<div class="progress"><div class="progress-bar progress-bar-striped progress-bar-'+ idx +'" role="progressbar" aria-valuemin="0" aria-valuemax="100"></div></div>').appendTo('.fileuploads');
+            var progressBar = $('.progress-bar-'+idx);
+
+            /* Make changes as the state of task changes with upload */
+            uploadTask.on(firebase.storage.TaskEvent.STATE_CHANGED,
+                function(snapshot){
+                    /* Get task progress and change the progressBar accordingly */
+                    progress = (snapshot.bytesTransferred / snapshot.totalBytes) * 100;
+                    progressBar.attr('aria-valuenow', progress);
+                    progressBar.css('width', progress + '%');
+                    progressBar.html(file.name + ': ' + Math.floor(progress).toString() + '%');
+                },
+                function(err) {
+                    progressBar.removeClass('progress-bar-striped');
+                    progressBar.style('background-color', RED, 'important');
+                    progressBar.html(file.name + ' upload unsucessfull')
+                    progressBar.tooltip({ 
+                        title: err, 
+                        container: ".progress", 
+                        placement: "right"
+                    });
+                    console.log("ERROR: (Index)", idx, err);
+                    reject(err);
+                },
+                function() {
+                    uploadTask.snapshot.ref.getDownloadURL().then(function(downloadURL) {
+                        /* Change progressBar text and bg + give tooltip */
+                        progressBar.removeClass('progress-bar-striped');
+                        progressBar.style('background-color', BLUE, 'important');
+                        progressBar.html("Completed:", file.name);
+                        fileRef.getMetadata().then(function(meta){
+                            /* Image Tooltip if the uploaded file is image */
+                            if(meta['contentType'].includes('image/'))
+                                progressBar.tooltip({ 
+                                    title: '<img style="width:160px;height:160px;" src="' + downloadURL + '" />', 
+                                    html: true, 
+                                    container: ".progress", 
+                                    placement: "right"
+                                });
+                            else
+                                progressBar.tooltip({ 
+                                    title: 'File Uploaded', 
+                                    container: ".progress", 
+                                    placement: "right"
+                                });
+                        });
+                        Snackbar.show({
+                            text: file.name + " Uploaded",
+                            pos: "top-right"
+                        });
+                        
+                    });
+                    resolve(fileRef);
                 }
-            }
+            );
+        });
+}
 
+
+function selectFile() {
+    /*
+     * This function allows multiple selection of files and makes 
+     * async calls to UploadFile(). It resolves as a file reference
+     */
+    var inputFile = $("<input type='file' multiple>").click(function() {
+        $(this).one("change", function(event) { 
+            for (var i = 0, f; f = event.target.files[i]; i++) {
+                 var File = event.target.files[i];
+
+                 // var response = uploadFile(File, storageRefRelease).then(function(fileRef){
+                 var response = uploadFile(File, storageRefDebug).then(function(fileRef){
+                    fileRef.getMetadata().then(function(meta){
+                        fileRef.getDownloadURL().then(function(downloadURL){
+                            fileRefs.push({
+                                name : meta['name'],
+                                downloadURL : downloadURL,
+                                fullPath: meta['fullPath']
+                            });
+                        }); 
+                    });
+                 });
+                 responses.push(response)
+            }
+            Promise.all(responses.map(promise => promise.catch(e => e)))
+                            .then(result => console.log(result.length))
+                            .catch(e => console.log(e));
         });
     });
     inputFile.click();
@@ -66,7 +145,7 @@ function selectImage() {
 }
 
 function verifyNotif() {
-
+    /* Verifies the required fields are filled */
     let isVerified = true;
 
     if (!$("#input-notification-title").val()) {
@@ -81,14 +160,20 @@ function verifyNotif() {
     return isVerified;
 }
 
-function insertNotificationToDatabase() {
-
-    const ADMIN_FEED_PATH_DEBUG = "/debug/adminFeed";
-    const ADMIN_FEED_PATH_RELEASE = "/release/adminFeed";
-    var dbRefDebug = firebase.database().ref(ADMIN_FEED_PATH_DEBUG);
-    // var dbRefRelease = firebase.database().ref(ADMIN_FEED_PATH_RELEASE);
+function sendToDB(msgTitle, username, msgText, fileRefs) {
+    var notificationData = {
+        title: msgTitle,
+        username: username,
+        text: msgText,
+        files: fileRefs,
+        fileExist: true,
+    };
+    if (fileRefs === undefined || fileRefs.length == 0) {
+        notificationData['fileExist'] = false;
+    };
 
     var notificationKey = dbRefDebug.push().key;
+    // var notificationKey = dbRefRelease.push().key;
 
     function setNotifResponse(result) {
 
@@ -109,66 +194,30 @@ function insertNotificationToDatabase() {
 
         }
     };
-
     dbRefDebug.child(notificationKey).set(notificationData, setNotifResponse);
     // dbRefRelease.child(notificationKey).set(notificationData,setNotifResponse);
-
 }
 
-function setNotifDataAndUpload() {
+function sendNotifData() {
 
     $("#spinner-upload").show();
-    notificationData.title = $("#input-notification-title").val();
-    notificationData.message = $("#input-notification-message").val();
+    var title = $("#input-notification-title").val();
+    var message = $("#input-notification-message").val();
     var userEmail = firebase.auth().currentUser.email;
-    notificationData.username = userEmail.substring(0, userEmail.indexOf("@"));
-    for (var i = fileListAll.length - 1; i >= 0; i--) {
-        currentFile = fileListAll[i];
-        console.log('Uploading ' + i + ' File');
-        if (currentFile) {
+    var username = userEmail.substring(0, userEmail.indexOf("@"));
 
-            //Upload the image/file
-            var storageRef = firebase.storage().ref("adminFeed-" +
-                currentFile.type.split('/')[0] +
-                "/" +
-                currentFile.name +
-                Date.now());
-            var uploadTask = storageRef.put(currentFile);
-            $("#spinner-upload").css("color", BLUE);
-            uploadTask.on("state_changed",
-                function progress(snapshot) {
-
-                },
-                function error(error) {
-                    toastr.error(error.message);
-                    $("#spinner-upload").css("color", RED);
-                    $("#spinner-upload").hide();
-                },
-                function complete(argument) {
-
-                    /**New image uploaded**/
-                    $("#spinner-upload").css("color", GREEN);
-                    //Get download url
-                    storageRef.getDownloadURL().then(function(url) {
-                        if(currentFile.type.search('image/')===0)
-                            notificationData.imageUrl = url;
-                        insertNotificationToDatabase();
-                    });
-                }
-            );
-        } else {
-            notificationData.imageUrl = "";
-            insertNotificationToDatabase();
-        }
-    }
+    sendToDB(title, username, message, fileRefs);
 }
 
-function sendNotification() {
-
+function diplayModal() {
+    /*
+     * displays the Modal that confirms the user wants to upload the
+     * files or not?
+     */
     if (!verifyNotif()) {
         return;
     }
-    if (!Array.isArray(fileListAll) || !fileListAll.length) {
+    if (!Array.isArray(fileRefs) || !fileRefs.length) {
         $("#alert-image-selected").hide();
     } else {
         $("#alert-image-not-selected").hide();
@@ -178,12 +227,12 @@ function sendNotification() {
 
 $(function() {
 
-    $("#btn-upload-image").click(selectImage);
+    $("#btn-upload-image").click(selectFile);
 
-    $("#btn-send").click(sendNotification);
+    $("#btn-send").click(diplayModal);
 
     $("#modal-confirm").on("hidden.bs.modal", resetAlerts);
 
-    $("#btn-send-confirm").click(setNotifDataAndUpload);
+    $("#btn-send-confirm").click(sendNotifData);
 
 });
