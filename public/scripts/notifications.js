@@ -66,7 +66,6 @@ function uploadFile(file, storageRef){
                 },
                 function(err) {
                     progressBar.removeClass('progress-bar-striped');
-                    progressBar.style('background-color', RED, 'important');
                     progressBar.html(file.name + ' upload unsucessfull')
                     progressBar.tooltip({ 
                         title: err, 
@@ -80,7 +79,6 @@ function uploadFile(file, storageRef){
                     uploadTask.snapshot.ref.getDownloadURL().then(function(downloadURL) {
                         /* Change progressBar text and bg + give tooltip */
                         progressBar.removeClass('progress-bar-striped');
-                        progressBar.style('background-color', BLUE, 'important');
                         progressBar.html("Completed:", file.name);
                         fileRef.getMetadata().then(function(meta){
                             /* Image Tooltip if the uploaded file is image */
@@ -161,12 +159,14 @@ function verifyNotif() {
 }
 
 function sendToDB(msgTitle, username, msgText, fileRefs) {
+    var d = new Date();
     var notificationData = {
         title: msgTitle,
         username: username,
         text: msgText,
         files: fileRefs,
         fileExist: true,
+        timestamp: d.toUTCString()
     };
     if (fileRefs === undefined || fileRefs.length == 0) {
         notificationData['fileExist'] = false;
