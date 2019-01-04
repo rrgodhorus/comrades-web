@@ -126,7 +126,8 @@ function selectFile() {
                             fileRefs.push({
                                 name : meta['name'],
                                 downloadURL : downloadURL,
-                                fullPath: meta['fullPath']
+                                fullPath: meta['fullPath'],
+                                meta: meta
                             });
                         }); 
                     });
@@ -163,12 +164,12 @@ function sendToDB(msgTitle, username, msgText, fileRefs) {
     var notificationData = {
         title: msgTitle,
         username: username,
-        text: msgText,
-        files: fileRefs,
+        content: msgText,
+        attachment: fileRefs,
         fileExist: true,
-        timestamp: d.toUTCString()
+        timestamp: d
     };
-    if (fileRefs === undefined || fileRefs.length == 0) {
+    if (attachment === undefined || attachment.length == 0) {
         notificationData['fileExist'] = false;
     };
 
